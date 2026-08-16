@@ -1,12 +1,41 @@
-# AI Roommate Simulation Core — Phase 1
+# AI Roommate Simulation Core — Autonomous Life Foundation
 
-This technical spike implements one shared, event-driven simulation runtime. It intentionally has no polished UI: `npm run demo` prints the **God View** as runtime JSON.
+This technical spike extends the shared Phase 1 runtime so Alice, Bob, and Carol can begin and continue life without a Director world event. It intentionally has no production UI, persistence, memory retrieval, or social scoring.
 
 ## Architecture and flow
 
-`Simulation` owns the shared world, virtual clock, event queue, observation router, action executor, and immutable-at-capture traces. Director events are queued, filtered by room visibility/audibility, converted to agent-specific contexts, sent through a provider adapter, validated, executed, and followed by a guarded self-activation. Perceptible world events stay within their room. `speak` creates a face-to-face `SPEECH_EVENT` for the same-room target and bystanders; `move` updates the shared location.
+`Simulation` still owns one shared world, virtual clock, sorted event queue, observation router, action executor, and God View traces. Phase 2 adds:
 
-The OpenAI adapter uses the Responses API with strict JSON Schema. It is deliberately separate from simulation logic. Failures never fall back: provider, parsing, validation, and execution errors pause the simulation and create an error record.
+- `bootstrapAutonomy()`, which queues staggered initial `AGENT_ACTIVATION` events for all three agents.
+- Agent-specific recurring commitments compiled into targeted `SCHEDULE_EVENT` start/end events.
+- Deterministic Needs progression driven only by Simulation Time.
+- A finite `start_activity` action alongside `speak`, `move`, and `wait`.
+- `runUntil()` event/activation guards for deterministic long runs and bounded live verification.
+
+Schedules are strong decision context, never scripts. A schedule event wakes the agent and supplies the commitment, but the engine accepts compliance, delay, or deviation. `work` is an abstract external location: agents there receive no apartment observations, and no workplace world or NPC simulation is created.
+
+## Needs and activities
+
+Needs use 0–100 and are clamped after every update. Per simulation hour:
+
+| Need | Deterministic change |
+|---|---:|
+| Energy | -2 |
+| Hunger | +4 |
+| Social pressure | +1.5 |
+| Stress | +0.5 |
+
+Finite activity effects are immediate and deterministic:
+
+| Activity | Effect |
+|---|---|
+| `eat` | Hunger -35 |
+| `sleep` | Energy +30, Stress -5 |
+| `work` | Energy -5, Stress +8 |
+| `rest` | Energy +10, Stress -15 |
+| `leisure` | Social pressure -10, Stress -10 |
+
+Needs and schedules influence the provider decision; neither forces an action.
 
 ## Run
 
@@ -18,16 +47,18 @@ export OPENAI_MODEL='gpt-4.1-mini' # optional
 npm run demo
 ```
 
-`.env.example` lists the supported variables for reference. The runtime reads exported environment variables directly and does not load `.env` files itself.
+`.env.example` lists supported variables for reference. The runtime reads exported variables directly and does not load env files itself.
 
-The demo injects `客廳突然停電`, routes it to one observer, performs exactly one real provider activation, and prints the complete state and God View traces. The one-activation bound proves the live Phase 1 chain without consuming API calls from pending speech or self-scheduled events. Keep credentials outside Git.
+The demo injects no Director event. It bootstraps autonomy at a Monday 09:00 simulation time and permits exactly one real provider activation. Pending schedule and self-activation events remain queued, which proves the autonomous chain without risking an API loop.
 
 ```bash
 npm test
 ```
 
-Tests use a deterministic provider fixture solely to test runtime mechanics; it is not evidence of a real provider invocation and does not satisfy AC-01.
+Tests use deterministic providers to cover both Phase 1 mechanics and a guarded 24-hour autonomous simulation. Fixtures are not evidence of real provider invocation.
 
-## Contracts
+## Agent context and trace contract
 
-Agent input contains `character`, `current_state`, `needs`, one filtered `observation`, and `relevant_memories: []`. Output contains `interpretation`, `intent`, an action (`speak`, `move`, or `wait`), and `next_activation.after_minutes` (5–360 simulation minutes). Memory retrieval is intentionally deferred.
+Provider context contains `character`, runtime `current_state`, current `needs`, one isolated `observation`, `schedule_context`, and `relevant_memories: []`. Memory remains intentionally deferred.
+
+Every activation trace records `activation_source`, `needs_before`, `needs_after`, `schedule_context`, `current_activity`, provider/model, interpretation, intent, structured action, world change, next activation, latency, and status. `world.activation_count` and the latest bounded-run result remain visible in God View.

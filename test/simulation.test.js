@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { decisionJsonSchema, parseDecision } from "../src/provider.js";
+import { buildResponsesRequest, decisionJsonSchema, extractResponseText, parseDecision } from "../src/provider.js";
 import { createWorld, EventType, Simulation } from "../src/simulation.js";
 
-const decision = (action = { type: "wait", target: null, content: null, destination: null }, after = 10) => ({ interpretation: "I noticed it", intent: "respond safely", action, next_activation: { after_minutes: after } });
+const decision = (action = { type: "wait", target: null, content: null, destination: null }, after = 10) => ({ interpretation: "I noticed it", intent: "respond safely", action: { activity: null, ...action }, next_activation: { after_minutes: after } });
 class ScriptedProvider {
   constructor(outputs) { this.outputs = [...outputs]; this.contexts = []; this.name = "test-scripted"; this.model = "deterministic-fixture"; }
   async invoke(context) { this.contexts.push(structuredClone(context)); const value = this.outputs.shift(); if (value instanceof Error) throw value; return JSON.stringify(value); }
@@ -48,7 +48,16 @@ test("same-room bystander receives face-to-face speech content", () => {
 test("structured decision validation accepts valid and rejects invalid output", () => {
   assert.equal(parseDecision(JSON.stringify(decision())).action.type, "wait"); assert.throws(() => parseDecision('{"action":'), /invalid JSON/); assert.throws(() => parseDecision(decision(undefined, 2)), /between 5 and 360/);
   assert.throws(() => parseDecision(decision({ type: "speak", target: null, content: null, destination: null })), /speak requires target and content/);
-  assert.equal(decisionJsonSchema.properties.action.anyOf.length, 3);
+  assert.equal(decisionJsonSchema.properties.action.anyOf.length, 4);
+});
+
+test("Responses request and output extraction share the live provider contract", () => {
+  const request = buildResponsesRequest({ needs: { hunger: 50 }, schedule_context: { current_commitment: null } }, "test-model");
+  const raw = JSON.stringify(decision());
+  const body = { output: [{ content: [{ type: "output_text", text: raw }] }] };
+  assert.equal(request.model, "test-model");
+  assert.equal(request.text.format.schema, decisionJsonSchema);
+  assert.equal(parseDecision(extractResponseText(body)).action.type, "wait");
 });
 
 test("move mutates shared world state", async () => {
