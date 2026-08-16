@@ -21,8 +21,10 @@ export class Simulation {
   dueEvents() { return this.world.events.filter(event => event.status === "pending" && event.scheduled_at <= this.world.simulation_time); }
   observers(event) {
     return Object.entries(this.world.agents).filter(([name, agent]) => {
-      if (event.type === EventType.SPEECH) return name === event.payload.target && (agent.current_state.location === event.location || event.payload.audible);
-      return (event.payload.visible && agent.current_state.location === event.location) || event.payload.audible;
+      const isInEventRoom = agent.current_state.location === event.location;
+      if (!isInEventRoom) return false;
+      if (event.type === EventType.SPEECH) return name !== event.payload.speaker;
+      return Boolean(event.payload.visible || event.payload.audible);
     }).map(([name]) => name);
   }
   observation(event, agent) {

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { parseDecision } from "../src/provider.js";
+import { decisionJsonSchema, parseDecision } from "../src/provider.js";
 import { createWorld, EventType, Simulation } from "../src/simulation.js";
 
 const decision = (action = { type: "wait", target: null, content: null, destination: null }, after = 10) => ({ interpretation: "I noticed it", intent: "respond safely", action, next_activation: { after_minutes: after } });
@@ -22,8 +22,33 @@ test("observation router isolates a visible, inaudible room event", () => {
   const carolContext = sim.context("Carol", { type: "scheduled_activation", content: "routine" }); assert.equal(JSON.stringify(carolContext).includes("玻璃杯"), false);
 });
 
+test("audible world event remains isolated to its room", () => {
+  const sim = simWith(); const event = sim.injectWorldEvent({ content: "客廳傳來巨響。", location: "living_room", visible: false, audible: true });
+  assert.deepEqual(sim.observers(event), ["Alice", "Bob"]); assert.equal(sim.observation(event, "Carol"), null);
+});
+
+test("face-to-face speech does not reach a target in another room", () => {
+  const sim = simWith(); sim.world.agents.Bob.current_state.location = "bedroom";
+  const trigger = sim.injectWorldEvent({ content: "talk", location: "living_room" });
+  sim.execute("Alice", { type: "speak", target: "Bob", content: "你聽得到嗎？", destination: null }, trigger);
+  const speech = sim.world.events.find(event => event.type === EventType.SPEECH);
+  assert.deepEqual(sim.observers(speech), []); assert.equal(sim.observation(speech, "Bob"), null);
+});
+
+test("same-room bystander receives face-to-face speech content", () => {
+  const sim = simWith(); sim.world.agents.Carol.current_state.location = "living_room";
+  const trigger = sim.injectWorldEvent({ content: "talk", location: "living_room" });
+  sim.execute("Alice", { type: "speak", target: "Bob", content: "Bob，你今天怎麼這麼晚回家？", destination: null }, trigger);
+  const speech = sim.world.events.find(event => event.type === EventType.SPEECH);
+  assert.deepEqual(sim.observers(speech), ["Bob", "Carol"]);
+  const carolContext = sim.context("Carol", sim.observation(speech, "Carol"));
+  assert.match(carolContext.observation.content, /Bob，你今天怎麼這麼晚回家/);
+});
+
 test("structured decision validation accepts valid and rejects invalid output", () => {
   assert.equal(parseDecision(JSON.stringify(decision())).action.type, "wait"); assert.throws(() => parseDecision('{"action":'), /invalid JSON/); assert.throws(() => parseDecision(decision(undefined, 2)), /between 5 and 360/);
+  assert.throws(() => parseDecision(decision({ type: "speak", target: null, content: null, destination: null })), /speak requires target and content/);
+  assert.equal(decisionJsonSchema.properties.action.anyOf.length, 3);
 });
 
 test("move mutates shared world state", async () => {

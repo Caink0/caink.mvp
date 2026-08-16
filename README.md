@@ -4,7 +4,7 @@ This technical spike implements one shared, event-driven simulation runtime. It 
 
 ## Architecture and flow
 
-`Simulation` owns the shared world, virtual clock, event queue, observation router, action executor, and immutable-at-capture traces. Director events are queued, filtered by room visibility/audibility, converted to agent-specific contexts, sent through a provider adapter, validated, executed, and followed by a guarded self-activation. `speak` creates a `SPEECH_EVENT`, routed only to its target; `move` updates the shared location.
+`Simulation` owns the shared world, virtual clock, event queue, observation router, action executor, and immutable-at-capture traces. Director events are queued, filtered by room visibility/audibility, converted to agent-specific contexts, sent through a provider adapter, validated, executed, and followed by a guarded self-activation. Perceptible world events stay within their room. `speak` creates a face-to-face `SPEECH_EVENT` for the same-room target and bystanders; `move` updates the shared location.
 
 The OpenAI adapter uses the Responses API with strict JSON Schema. It is deliberately separate from simulation logic. Failures never fall back: provider, parsing, validation, and execution errors pause the simulation and create an error record.
 
@@ -13,13 +13,14 @@ The OpenAI adapter uses the Responses API with strict JSON Schema. It is deliber
 Requires Node.js 20+ and a real OpenAI API credential:
 
 ```bash
-cp .env.example .env
 export OPENAI_API_KEY='...'
 export OPENAI_MODEL='gpt-4.1-mini' # optional
 npm run demo
 ```
 
-The demo injects `客廳突然停電`, invokes real agents, processes generated speech/activations, and prints the complete state and God View traces. Keep credentials outside Git.
+`.env.example` lists the supported variables for reference. The runtime reads exported environment variables directly and does not load `.env` files itself.
+
+The demo injects `客廳突然停電`, routes it to one observer, performs exactly one real provider activation, and prints the complete state and God View traces. The one-activation bound proves the live Phase 1 chain without consuming API calls from pending speech or self-scheduled events. Keep credentials outside Git.
 
 ```bash
 npm test

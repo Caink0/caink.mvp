@@ -19,7 +19,7 @@ export class OpenAIProvider {
         headers: { Authorization: `Bearer ${this.apiKey}`, "Content-Type": "application/json" },
         body: JSON.stringify({
           model: this.model,
-          instructions: "You are a simulated roommate. Decide only from the supplied context. Return a valid decision matching the JSON schema. Actions are speak, move, or wait.",
+          instructions: "You are a simulated roommate. Decide only from the supplied context. Return a valid decision matching the JSON schema. Known agents are Alice, Bob, and Carol. Speak to another known agent, move only to living_room, bedroom, or kitchen, or wait.",
           input: JSON.stringify(context),
           text: { format: { type: "json_schema", name: "agent_decision", strict: true, schema: decisionJsonSchema } }
         })
@@ -44,14 +44,38 @@ export const decisionJsonSchema = {
     interpretation: { type: "string", minLength: 1 },
     intent: { type: "string", minLength: 1 },
     action: {
-      type: "object", additionalProperties: false,
-      required: ["type", "target", "content", "destination"],
-      properties: {
-        type: { enum: ["speak", "move", "wait"] },
-        target: { type: ["string", "null"] },
-        content: { type: ["string", "null"] },
-        destination: { type: ["string", "null"] }
-      }
+      anyOf: [
+        {
+          type: "object", additionalProperties: false,
+          required: ["type", "target", "content", "destination"],
+          properties: {
+            type: { enum: ["speak"] },
+            target: { enum: ["Alice", "Bob", "Carol"] },
+            content: { type: "string", minLength: 1 },
+            destination: { type: "null" }
+          }
+        },
+        {
+          type: "object", additionalProperties: false,
+          required: ["type", "target", "content", "destination"],
+          properties: {
+            type: { enum: ["move"] },
+            target: { type: "null" },
+            content: { type: "null" },
+            destination: { enum: ["living_room", "bedroom", "kitchen"] }
+          }
+        },
+        {
+          type: "object", additionalProperties: false,
+          required: ["type", "target", "content", "destination"],
+          properties: {
+            type: { enum: ["wait"] },
+            target: { type: "null" },
+            content: { type: "null" },
+            destination: { type: "null" }
+          }
+        }
+      ]
     },
     next_activation: { type: "object", additionalProperties: false, required: ["after_minutes"], properties: { after_minutes: { type: "number", minimum: 5, maximum: 360 } } }
   }
