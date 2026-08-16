@@ -1,18 +1,16 @@
 import { OpenAIProvider } from "./provider.js";
-import { Simulation } from "./simulation.js";
+import { createWorld, Simulation } from "./simulation.js";
 
-const simulation = new Simulation({ provider: new OpenAIProvider() });
-const event = simulation.injectWorldEvent({ content: "客廳突然停電", location: "living_room", visible: true, audible: false });
-const [agent] = simulation.observers(event);
+const simulation = new Simulation({ world: createWorld("2026-01-05T09:00:00.000Z"), provider: new OpenAIProvider() });
+simulation.bootstrapAutonomy({ horizonHours: 24 });
 simulation.resume();
+let run;
 try {
-  if (!agent) throw new Error("Director event had no observer");
-  await simulation.activate(agent, event, simulation.observation(event, agent));
-  event.status = "processed";
+  run = await simulation.runUntil("2026-01-05T09:05:00.000Z", { maxEvents: 3, maxActivations: 1 });
   simulation.pause();
 } catch (error) {
   console.error(`Simulation paused: ${error.message}`);
 }
-// Bounded to one real activation so pending speech/self-activation cannot create an API loop.
-console.log(JSON.stringify(simulation.world, null, 2));
+// Director injects no world event; the one-activation guard prevents an autonomous API loop.
+console.log(JSON.stringify({ run, world: simulation.world }, null, 2));
 if (simulation.world.status === "paused" && simulation.world.errors.length) process.exitCode = 1;
